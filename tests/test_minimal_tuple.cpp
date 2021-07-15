@@ -1,9 +1,14 @@
 #include "minpp/tuple.h"
 #include <tuple>
+#include <memory>
 
 #include <iostream>
 
 int main() {
+    {
+        std::cout << std::integral_constant<int, minpp::get<0>(minpp::tuple<int>{0})>::value << std::endl;
+    }
+
     {
         minpp::tuple<int, int, int> tup {0, 1, 2}; 
 
@@ -79,6 +84,40 @@ int main() {
 
         auto [a, b, c] {tup};
         std::cout << a << ' ' << b << ' ' << c << std::endl;
+    }
+
+    {
+        minpp::tuple<size_t, size_t, size_t> tup {minpp::tuple<int, int, int>{0, 1, 2}};
+
+        auto [a, b, c] {tup};
+        std::cout << a << ' ' << b << ' ' << c << std::endl;
+    }
+
+    {
+        minpp::tuple<size_t, size_t, size_t> tup {std::tuple<int, int, int>{0, 1, 2}};
+
+        auto [a, b, c] {tup};
+        std::cout << a << ' ' << b << ' ' << c << std::endl;
+    }
+
+    {
+        std::tuple<int, short, long> t1;
+        std::tuple<> t2;
+        std::tuple<float, double, long double> t3;
+        std::tuple<void*, char*> t4;
+        auto x = std::tuple_cat(t1, t2, t3, t4, std::make_tuple(std::unique_ptr<int>{}));
+        using expected_type = std::tuple<int, short, long, float, double, long double, void*, char*, std::unique_ptr<int>>;
+        static_assert(std::is_same<decltype(x), expected_type>::value, "std tuple_cat got wrong tuple type!");
+    }
+
+    {
+        minpp::tuple<int, short, long> t1;
+        minpp::tuple<> t2;
+        minpp::tuple<float, double, long double> t3;
+        minpp::tuple<void*, char*> t4;
+        auto x = minpp::tuple_cat(t1, t2, t3, t4, minpp::make_tuple(std::unique_ptr<int>{}));
+        using expected_type = minpp::tuple<int, short, long, float, double, long double, void*, char*, std::unique_ptr<int>>;
+        static_assert(std::is_same<decltype(x), expected_type>::value, "minpp tuple_cat got wrong tuple type!");
     }
     
 }
