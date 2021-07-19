@@ -2,6 +2,7 @@
 #define MINPP_TUPLE_H_
 #include "minpp/_minpp_macros.h"
 #include "minpp/common_meta.h"
+#include "minpp/common_concepts.h"
 
 #include <concepts>
 #include <type_traits>
@@ -47,14 +48,50 @@ struct tuple_leaf {
     public:
     constexpr tuple_leaf() = default;
 
-    template<typename U>
+    template <typename U>
     constexpr tuple_leaf(U&& v): value{std::forward<U>(v)} {}
 
-    template<typename U>
-    constexpr tuple_leaf(_select_tuple_leaf_ctor, const tuple_leaf<I, U>& v): value{v.value} {}
+    template <typename U>
+    constexpr tuple_leaf(_select_tuple_leaf_ctor, const tuple_leaf<I, U>& v): tuple_leaf{v.value} {}
 
-    template<typename U>
-    constexpr tuple_leaf(_select_tuple_leaf_ctor, tuple_leaf<I, U>&& v): value{std::move(v.value)} {}
+    template <typename U>
+    constexpr tuple_leaf(_select_tuple_leaf_ctor, tuple_leaf<I, U>&& v): tuple_leaf{std::move(v.value)} {}
+
+    template <typename Alloc>
+    constexpr tuple_leaf(std::allocator_arg_t, const Alloc& a) requires requires {
+        !leading_allocator_constructible<T, Alloc>;
+        !trailing_allocator_constructible<T, Alloc>;
+    }
+    : value{} {}
+
+    template <typename Alloc>
+    constexpr tuple_leaf(std::allocator_arg_t, const Alloc& a) requires leading_allocator_constructible<T, Alloc>
+    : value{std::allocator_arg_t{}, a} {}
+
+    template <typename Alloc>
+    constexpr tuple_leaf(std::allocator_arg_t, const Alloc& a) requires trailing_allocator_constructible<T, Alloc>
+    : value{a} {}
+
+    template <typename Alloc, typename U>
+    constexpr tuple_leaf(std::allocator_arg_t, const Alloc& a, U&& v) requires requires {
+        !leading_allocator_constructible<T, Alloc, U>;
+        !trailing_allocator_constructible<T, Alloc, U>;
+    }
+    : value{std::forward<U>(v)} {}
+
+    template <typename Alloc, typename U>
+    constexpr tuple_leaf(std::allocator_arg_t, const Alloc& a, U&& v) requires leading_allocator_constructible<T, Alloc, U>
+    : value{std::allocator_arg_t{}, a, std::forward<U>(v)} {}
+
+    template <typename Alloc, typename U>
+    constexpr tuple_leaf(std::allocator_arg_t, const Alloc& a, U&& v) requires trailing_allocator_constructible<T, Alloc, U>
+    : value{std::forward<U>(v), a} {}
+
+    template <typename Alloc, typename U>
+    constexpr tuple_leaf(std::allocator_arg_t, const Alloc& a, _select_tuple_leaf_ctor, const tuple_leaf<I, U>& v): tuple_leaf{std::allocator_arg_t{}, a, v.value} {}
+
+    template <typename Alloc, typename U>
+    constexpr tuple_leaf(std::allocator_arg_t, const Alloc& a, _select_tuple_leaf_ctor, tuple_leaf<I, U>&& v): tuple_leaf{std::allocator_arg_t{}, a, std::move(v.value)} {}
 
     constexpr void swap(tuple_leaf& other) noexcept(std::is_nothrow_swappable_v<T>) {
         std::swap(value, other.value);
@@ -67,20 +104,25 @@ struct tuple_t_from_size {
     struct _tuple_t_with_size {
         template<typename... T>
         struct _tuple_t: public tuple_leaf<Is, T>... {
-            // 1)
+            // § 20.5.3.1 1)
             constexpr _tuple_t() = default;
-            // 2)
+
+            // § 20.5.3.1 2)
             constexpr _tuple_t(const T&... v) : tuple_leaf<Is, T>{v}... {}
-            // 3)
+
+            // § 20.5.3.1 3)
             template <typename... UTypes>
             constexpr _tuple_t(UTypes&&... u) requires requires {
                 requires sizeof...(UTypes) == sizeof...(T);
             } : tuple_leaf<Is, T>{std::forward<UTypes>(u)}... {}
-            // 4)
+
+            // § 20.5.3.1 4)
             _tuple_t(const _tuple_t&) = default;
-            // 5)
+
+            // § 20.5.3.1 5)
             _tuple_t(_tuple_t&&) = default;
-            // 6, 8)
+
+            // § 20.5.3.1 6, 8)
             template <template <typename...> typename _Tuple_Like, typename... UTypes>
             constexpr _tuple_t(const _Tuple_Like<UTypes...>& v) requires requires {
                 requires !std::derived_from<_Tuple_Like<UTypes...>, _tuple_t<UTypes...>>;
@@ -88,28 +130,81 @@ struct tuple_t_from_size {
             }
             : tuple_leaf<Is, T>{get<Is>(v)}... {};
 
+            // § 20.5.3.1 6, 8) (specialized for _tuple_t)
             template <typename... UTypes>
             constexpr _tuple_t(const _tuple_t<UTypes...>& v) : tuple_leaf<Is, T>{_select_tuple_leaf_ctor{}, v}... {};
-            // 7, 9)
+
+            // § 20.5.3.1 7, 9)
             template <template <typename...> typename _Tuple_Like, typename... UTypes>
             constexpr _tuple_t(_Tuple_Like<UTypes...>&& v) requires requires {
                 requires !std::derived_from<_Tuple_Like<UTypes...>, _tuple_t<UTypes...>>;
+                { ((get<Is>(std::move(v)), void()), ...) };
+            }
+            : tuple_leaf<Is, T>{get<Is>(std::move(v))}... {};
+
+            // § 20.5.3.1 7, 9) (specialized for _tuple_t)
+            template <typename... UTypes>
+            constexpr _tuple_t(_tuple_t<UTypes...>&& v) : tuple_leaf<Is, T>{_select_tuple_leaf_ctor{}, std::move(v)}... {};
+
+            // § 20.5.3.1 10)
+            template <typename Alloc>
+            constexpr _tuple_t(std::allocator_arg_t, const Alloc& a) : tuple_leaf<Is, T>{std::allocator_arg_t{}, a}... {}
+
+            // § 20.5.3.1 11)
+            template <typename Alloc>
+            constexpr _tuple_t(std::allocator_arg_t, const Alloc& a, const T&... v) : tuple_leaf<Is, T>{std::allocator_arg_t{}, a, v}... {}
+
+            // § 20.5.3.1 12)
+            template <typename Alloc, typename... UTypes>
+            constexpr _tuple_t(std::allocator_arg_t, const Alloc& a, UTypes&&... u) requires requires {
+                requires sizeof...(UTypes) == sizeof...(T);
+            } : tuple_leaf<Is, T>{std::allocator_arg_t{}, a, std::forward<UTypes>(u)}... {}
+
+            // § 20.5.3.1 13, 15, 17)
+            template <typename Alloc, template <typename...> typename _Tuple_Like, typename... UTypes>
+            constexpr _tuple_t(std::allocator_arg_t, const Alloc& a, const _Tuple_Like<UTypes...>& v) requires requires {
+                requires !std::derived_from<_Tuple_Like<UTypes...>, _tuple_t<UTypes...>>;
                 { ((get<Is>(v), void()), ...) };
             }
-            : tuple_leaf<Is, T>{get<Is>(v)}... {};
+            : tuple_leaf<Is, T>{std::allocator_arg_t{}, a, get<Is>(v)}... {};
 
-            template <typename... UTypes>
-            constexpr _tuple_t(_tuple_t<UTypes...>&& v) : tuple_leaf<Is, T>{_select_tuple_leaf_ctor{}, v}... {};
+            // § 20.5.3.1 13, 15, 17) (specialized for _tuple_t)
+            template <typename Alloc, typename... UTypes>
+            constexpr _tuple_t(std::allocator_arg_t, const Alloc& a, const _tuple_t<UTypes...>& v) : tuple_leaf<Is, T>{std::allocator_arg_t{}, a, _select_tuple_leaf_ctor{}, v}... {};
 
-            // not annotated
+            // § 20.5.3.1 14, 16, 18)
+            template <typename Alloc, template <typename...> typename _Tuple_Like, typename... UTypes>
+            constexpr _tuple_t(std::allocator_arg_t, const Alloc& a, _Tuple_Like<UTypes...>&& v) requires requires {
+                requires !std::derived_from<_Tuple_Like<UTypes...>, _tuple_t<UTypes...>>;
+                { ((get<Is>(std::move(v)), void()), ...) };
+            }
+            : tuple_leaf<Is, T>{std::allocator_arg_t{}, a, get<Is>(std::move(v))}... {};
 
-            constexpr _tuple_t& operator=(const _tuple_t& other) noexcept((std::is_nothrow_copy_assignable_v<T> && ...)) {
-                (tuple_leaf<Is, T>::operator=(static_cast<const tuple_leaf<Is, T>&>(other)), ...);
+            // § 20.5.3.1 14, 16, 18) (specialized for _tuple_t)
+            template <typename Alloc, typename... UTypes>
+            constexpr _tuple_t(std::allocator_arg_t, const Alloc& a, _tuple_t<UTypes...>&& v) : tuple_leaf<Is, T>{std::allocator_arg_t{}, a, _select_tuple_leaf_ctor{}, std::move(v)}... {};
+
+
+            // § 20.5.3.2
+            constexpr _tuple_t& operator=(const _tuple_t& u) noexcept((std::is_nothrow_copy_assignable_v<T> && ...)) {
+                (tuple_leaf<Is, T>::operator=(static_cast<const tuple_leaf<Is, T>&>(u)), ...);
                 return *this;
             }
 
-            constexpr _tuple_t& operator=(_tuple_t&& other) noexcept((std::is_nothrow_move_assignable_v<T> && ...)) {
-                (tuple_leaf<Is, T>::operator=(static_cast<tuple_leaf<Is, T>&&>(other)), ...);
+            constexpr _tuple_t& operator=(_tuple_t&& u) noexcept((std::is_nothrow_move_assignable_v<T> && ...)) {
+                (tuple_leaf<Is, T>::operator=(static_cast<tuple_leaf<Is, T>&&>(u)), ...);
+                return *this;
+            }
+
+            template <typename... UTypes>
+            constexpr _tuple_t& operator=(const _tuple_t<UTypes...>& u) {
+                (tuple_leaf<Is, T>::operator=(get<Is>(u)), ...);
+                return *this;
+            }
+
+            template <typename... UTypes>
+            constexpr _tuple_t& operator=(_tuple_t<UTypes...>&& u) {
+                (tuple_leaf<Is, T>::operator=(get<Is>(u)), ...);
                 return *this;
             }
 
@@ -182,7 +277,7 @@ struct tuple: public impl::tuple_t_from_size<sizeof...(Types)>::template tuple_t
 
     using _impl = typename impl::tuple_t_from_size<sizeof...(Types)>::template tuple_t<Types...>;
     
-    /*
+    /**
     § 20.5.3.1 
     1)  
     Effects: Value-initializes each element.
@@ -191,10 +286,10 @@ struct tuple: public impl::tuple_t_from_size<sizeof...(Types)>::template tuple_t
     @fn constexpr explicit(see below ) tuple();
     */
     constexpr explicit(!(minpp::is_list_constructible_v<Types> && ...)) tuple() requires requires {
-        requires (std::constructible_from<Types, Types> && ...);
+        requires (std::constructible_from<Types> && ...);
     } = default;
 
-    /*
+    /**
     § 20.5.3.1 
     2)      
     Effects: Initializes each element with the value of the corresponding parameter.
@@ -206,9 +301,9 @@ struct tuple: public impl::tuple_t_from_size<sizeof...(Types)>::template tuple_t
         // requires sizeof...(Types) > 0; // sizeof...(Types) == 0 instantiate specialized tuple template
         requires (std::copy_constructible<Types> && ...);
     }
-    : _impl{v...} {};
+    : _impl{v...} {}
 
-    /*
+    /**
     § 20.5.3.1 
     3) 
     Effects: Initializes the elements in the tuple with the corresponding value in std::forward<UTypes>(u).
@@ -223,9 +318,9 @@ struct tuple: public impl::tuple_t_from_size<sizeof...(Types)>::template tuple_t
         // requires sizeof...(Types) > 0; // sizeof...(Types) == 0 instantiate specialized tuple template
         requires (std::constructible_from<Types, UTypes> && ...);
     }
-    : _impl{std::forward<UTypes>(u)...} {};
+    : _impl{std::forward<UTypes>(u)...} {}
 
-    /*
+    /**
     § 20.5.3.1 
     4)
     Effects: Initializes each element of *this with the corresponding element of u.
@@ -235,7 +330,7 @@ struct tuple: public impl::tuple_t_from_size<sizeof...(Types)>::template tuple_t
         requires (std::copy_constructible<Types> && ...);
     } = default;
 
-    /*
+    /**
     § 20.5.3.1 
     5)  
     Effects: For all i, initializes the ith element of *this with std::forward<Ti>(get<i>(u))
@@ -245,7 +340,7 @@ struct tuple: public impl::tuple_t_from_size<sizeof...(Types)>::template tuple_t
         requires (std::move_constructible<Types> && ...);
     } = default;
 
-    /*
+    /**
     § 20.5.3.1 
     6) 
     Effects: Initializes each element of *this with the corresponding element of u.
@@ -271,9 +366,9 @@ struct tuple: public impl::tuple_t_from_size<sizeof...(Types)>::template tuple_t
 
 #if MINPP_STD_COMPAT
 
-    /*
+    /**
     § 20.5.3.1 
-    6) 
+    6) [std] 
     Effects: Initializes each element of *this with the corresponding element of u.
     Remarks: The expression inside explicit is equivalent to:
             !conjunction_v<is_convertible<const UTypes&, Types>...>
@@ -289,7 +384,6 @@ struct tuple: public impl::tuple_t_from_size<sizeof...(Types)>::template tuple_t
             requires {
                 requires !(std::convertible_to<const tuple<UTypes>&, Types> && ...);
                 requires !(std::constructible_from<Types, const tuple<UTypes>&> && ...);
-                !std::same_as<tuple<Types...>, tuple<UTypes...>>;
             };
         };
     }
@@ -297,7 +391,7 @@ struct tuple: public impl::tuple_t_from_size<sizeof...(Types)>::template tuple_t
 
 #endif
 
-    /*
+    /**
     § 20.5.3.1 
     7)  
     Effects: For all i, initializes the ith element of *this with std::forward<Ui>(get<i>(u)).
@@ -319,13 +413,13 @@ struct tuple: public impl::tuple_t_from_size<sizeof...(Types)>::template tuple_t
             };
         };
     }
-    : _impl{v} {}
+    : _impl{std::move(v)} {}
 
 #if MINPP_STD_COMPAT
 
-    /*
+    /**
     § 20.5.3.1 
-    7) [std]
+    7) [std] 
     Effects: For all i, initializes the ith element of *this with std::forward<Ui>(get<i>(u)).
     Remarks: The expression inside explicit is equivalent to:
             !conjunction_v<is_convertible<UTypes, Types>...>
@@ -341,17 +435,18 @@ struct tuple: public impl::tuple_t_from_size<sizeof...(Types)>::template tuple_t
             requires {
                 requires !(std::convertible_to<tuple<UTypes>, Types> && ...);
                 requires !(std::constructible_from<Types, tuple<UTypes>> && ...);
-                !std::same_as<tuple<Types...>, tuple<UTypes...>>;
             };
         };
     }
-    : _impl{v} {}
+    : _impl{std::move(v)} {}
 
 #endif
 
-    /*
+#if MINPP_STD_COMPAT
+
+    /**
     § 20.5.3.1 
-    8)    
+    8) [std] 
     Effects: Initializes the first element with u.first and the second element with u.second.
     Remarks: The expression inside explicit is equivalent to:
             !is_convertible_v<const U1&, T0> || !is_convertible_v<const U2&, T1>
@@ -365,9 +460,13 @@ struct tuple: public impl::tuple_t_from_size<sizeof...(Types)>::template tuple_t
     }
     : _impl{v} {}
 
-    /*
+#endif
+
+#if MINPP_STD_COMPAT
+
+    /**
     § 20.5.3.1 
-    9)  
+    9) [std] 
     Effects: Initializes the first element with std::forward<U1>(u.first) and the second element with
         std::forward<U2>(u.second).
     Remarks: The expression inside explicit is equivalent to:
@@ -380,17 +479,276 @@ struct tuple: public impl::tuple_t_from_size<sizeof...(Types)>::template tuple_t
         requires sizeof...(Types) == 2;
         requires (std::constructible_from<Types, UTypes> && ...);
     }
-    : _impl{v} {}
+    : _impl{std::move(v)} {}
 
-    // not annotated
+#endif
 
-    constexpr tuple& operator=(const tuple& other) noexcept((std::is_nothrow_copy_assignable_v<Types> && ...)) {
-        _impl::operator=(other);
+    /**
+    § 20.5.3.1 
+    10) 
+    Preconditions: Alloc meets the Cpp17Allocator requirements (Table 36).
+    Effects: Equivalent to the preceding constructors except that each element is constructed with usesallocator construction (20.10.7.2).
+    @fn template <class Alloc>
+        constexpr explicit(see below) tuple(allocator_arg_t, const Alloc& a);
+    */
+    template <typename Alloc>
+    constexpr explicit(!(minpp::is_list_constructible_v<Types> && ...)) tuple(std::allocator_arg_t, const Alloc& a) requires requires {
+        requires (std::constructible_from<Types> && ...);
+    }
+    : _impl{std::allocator_arg_t{}, a} {}
+
+    /**
+    § 20.5.3.1 
+    11) 
+    Preconditions: Alloc meets the Cpp17Allocator requirements (Table 36).
+    Effects: Equivalent to the preceding constructors except that each element is constructed with usesallocator construction (20.10.7.2).
+    @fn template<class Alloc>
+        constexpr explicit(see below) tuple(allocator_arg_t, const Alloc& a, const Types&...);
+    */
+    template <typename Alloc, typename... UTypes>
+    constexpr explicit(!(std::is_convertible_v<const Types&, Types> && ...)) tuple(std::allocator_arg_t, const Alloc& a, const Types&... v) requires requires {
+        requires (std::constructible_from<Types> && ...);
+    }
+    : _impl{std::allocator_arg_t{}, a, v...} {}
+
+    /**
+    § 20.5.3.1 
+    12) 
+    Preconditions: Alloc meets the Cpp17Allocator requirements (Table 36).
+    Effects: Equivalent to the preceding constructors except that each element is constructed with usesallocator construction (20.10.7.2).
+    @fn template<class Alloc, class... UTypes>
+        constexpr explicit(see below) tuple(allocator_arg_t, const Alloc& a, UTypes&&...);
+    */
+    template <typename Alloc, typename... UTypes>
+    constexpr explicit(!(std::is_convertible_v<UTypes, Types> && ...)) tuple(std::allocator_arg_t, const Alloc& a, UTypes&&... u) requires requires {
+        requires sizeof...(Types) == sizeof...(UTypes);
+        // requires sizeof...(Types) > 0; // sizeof...(Types) == 0 instantiate specialized tuple template
+        requires (std::constructible_from<Types, UTypes> && ...);
+    }
+    : _impl{std::allocator_arg_t{}, a, std::forward<UTypes>(u)...} {}
+
+    /**
+    § 20.5.3.1 
+    13) 
+    Preconditions: Alloc meets the Cpp17Allocator requirements (Table 36).
+    Effects: Equivalent to the preceding constructors except that each element is constructed with usesallocator construction (20.10.7.2).
+    @fn template<class Alloc>
+        constexpr tuple(allocator_arg_t, const Alloc& a, const tuple&);
+    */
+    template <typename Alloc>
+    constexpr tuple(std::allocator_arg_t, const Alloc& a, const tuple& u) requires requires {
+        requires (std::copy_constructible<Types> && ...);
+    }
+    : _impl{std::allocator_arg_t{}, a, u} {}
+
+    /**
+    § 20.5.3.1 
+    14) 
+    Preconditions: Alloc meets the Cpp17Allocator requirements (Table 36).
+    Effects: Equivalent to the preceding constructors except that each element is constructed with usesallocator construction (20.10.7.2).
+    @fn template<class Alloc>
+        constexpr tuple(allocator_arg_t, const Alloc& a, tuple&&);
+    */
+    template <typename Alloc>
+    constexpr tuple(std::allocator_arg_t, const Alloc& a, tuple&& u) requires requires {
+        requires (std::move_constructible<Types> && ...);
+    }
+    : _impl{std::allocator_arg_t{}, a, std::move(u)} {}
+
+    /**
+    § 20.5.3.1 
+    15) 
+    Preconditions: Alloc meets the Cpp17Allocator requirements (Table 36).
+    Effects: Equivalent to the preceding constructors except that each element is constructed with usesallocator construction (20.10.7.2).
+    @fn template<class Alloc, class... UTypes>
+        constexpr explicit(see below) tuple(allocator_arg_t, const Alloc& a, const tuple<UTypes...>&);
+    */
+    template <typename Alloc, typename... UTypes>
+    constexpr explicit(!(std::is_convertible_v<const UTypes&, Types> && ...)) tuple(std::allocator_arg_t, const Alloc& a, const tuple<UTypes...>& v) requires requires {
+        requires sizeof...(Types) == sizeof...(UTypes);
+        requires (std::constructible_from<Types, const UTypes&> && ...);
+        requires requires {
+            requires sizeof...(Types) != 1 ||
+            requires {
+                requires !(std::convertible_to<const tuple<UTypes>&, Types> && ...);
+                requires !(std::constructible_from<Types, const tuple<UTypes>&> && ...);
+                !std::same_as<tuple<Types...>, tuple<UTypes...>>;
+            };
+        };
+    }
+    : _impl{std::allocator_arg_t{}, a, v} {}
+
+#if MINPP_STD_COMPAT
+
+    /**
+    § 20.5.3.1 
+    15) [std]
+    Preconditions: Alloc meets the Cpp17Allocator requirements (Table 36).
+    Effects: Equivalent to the preceding constructors except that each element is constructed with usesallocator construction (20.10.7.2).
+    @fn template<class Alloc, class... UTypes>
+        constexpr explicit(see below) tuple(allocator_arg_t, const Alloc& a, const tuple<UTypes...>&);
+    */
+    template <typename Alloc, typename... UTypes>
+    constexpr explicit(!(std::is_convertible_v<const UTypes&, Types> && ...)) tuple(std::allocator_arg_t, const Alloc& a, const std::tuple<UTypes...>& v) requires requires {
+        requires sizeof...(Types) == sizeof...(UTypes);
+        requires (std::constructible_from<Types, const UTypes&> && ...);
+        requires requires {
+            requires sizeof...(Types) != 1 ||
+            requires {
+                requires !(std::convertible_to<const tuple<UTypes>&, Types> && ...);
+                requires !(std::constructible_from<Types, const tuple<UTypes>&> && ...);
+            };
+        };
+    }
+    : _impl{std::allocator_arg_t{}, a, v} {}
+
+#endif
+
+    /**
+    § 20.5.3.1 
+    16) 
+    Preconditions: Alloc meets the Cpp17Allocator requirements (Table 36).
+    Effects: Equivalent to the preceding constructors except that each element is constructed with usesallocator construction (20.10.7.2).
+    @fn template<class Alloc, class... UTypes>
+        constexpr explicit(see below) tuple(allocator_arg_t, const Alloc& a, tuple<UTypes...>&&);
+    */
+    template <typename Alloc, typename... UTypes>
+    constexpr explicit(!(std::is_convertible_v<UTypes, Types> && ...)) tuple(std::allocator_arg_t, const Alloc& a, tuple<UTypes...>&& v) requires requires {
+        requires sizeof...(Types) == sizeof...(UTypes);
+        requires (std::constructible_from<Types, UTypes> && ...);
+        requires requires {
+            requires sizeof...(Types) != 1 ||
+            requires {
+                requires !(std::convertible_to<tuple<UTypes>, Types> && ...);
+                requires !(std::constructible_from<Types, tuple<UTypes>> && ...);
+                !std::same_as<tuple<Types...>, tuple<UTypes...>>;
+            };
+        };
+    }
+    : _impl{std::allocator_arg_t{}, a, std::move(v)} {}
+
+#if MINPP_STD_COMPAT
+
+    /**
+    § 20.5.3.1 
+    16) 
+    Preconditions: Alloc meets the Cpp17Allocator requirements (Table 36).
+    Effects: Equivalent to the preceding constructors except that each element is constructed with usesallocator construction (20.10.7.2).
+    @fn template<class Alloc, class... UTypes>
+        constexpr explicit(see below) tuple(allocator_arg_t, const Alloc& a, tuple<UTypes...>&&);
+    */
+    template <typename Alloc, typename... UTypes>
+    constexpr explicit(!(std::is_convertible_v<UTypes, Types> && ...)) tuple(std::allocator_arg_t, const Alloc& a, std::tuple<UTypes...>&& v) requires requires {
+        requires sizeof...(Types) == sizeof...(UTypes);
+        requires (std::constructible_from<Types, UTypes> && ...);
+        requires requires {
+            requires sizeof...(Types) != 1 ||
+            requires {
+                requires !(std::convertible_to<tuple<UTypes>, Types> && ...);
+                requires !(std::constructible_from<Types, tuple<UTypes>> && ...);
+            };
+        };
+    }
+    : _impl{std::allocator_arg_t{}, a, std::move(v)} {}
+
+#endif
+
+#if MINPP_STD_COMPAT
+
+    /**
+    § 20.5.3.1 
+    17) 
+    Preconditions: Alloc meets the Cpp17Allocator requirements (Table 36).
+    Effects: Equivalent to the preceding constructors except that each element is constructed with usesallocator construction (20.10.7.2).
+    @fn template<class Alloc, class U1, class U2>
+        constexpr explicit(see below) tuple(allocator_arg_t, const Alloc& a, const pair<U1, U2>&);
+    */
+    template <typename Alloc, typename... UTypes>
+    constexpr explicit(!(std::is_convertible_v<const UTypes&, Types> && ...)) tuple(std::allocator_arg_t, const Alloc& a, const std::pair<UTypes...>& v) requires requires {
+        requires sizeof...(Types) == 2;
+        requires (std::constructible_from<Types, const UTypes&> && ...);
+    }
+    : _impl{std::allocator_arg_t{}, a, v} {}
+
+#endif
+
+#if MINPP_STD_COMPAT
+
+    /**
+    § 20.5.3.1 
+    18) 
+    Preconditions: Alloc meets the Cpp17Allocator requirements (Table 36).
+    Effects: Equivalent to the preceding constructors except that each element is constructed with usesallocator construction (20.10.7.2).
+    @fn template<class Alloc, class U1, class U2>
+        constexpr explicit(see below) tuple(allocator_arg_t, const Alloc& a, pair<U1, U2>&&);
+    */
+    template <typename Alloc, typename... UTypes>
+    constexpr explicit(!(std::is_convertible_v<const UTypes&, Types> && ...)) tuple(std::allocator_arg_t, const Alloc& a, std::pair<UTypes...>&& v) requires requires {
+        requires sizeof...(Types) == 2;
+        requires (std::constructible_from<Types, UTypes> && ...);
+    }
+    : _impl{std::allocator_arg_t{}, a, std::move(v)} {}
+
+#endif
+
+
+    /**
+    § 20.5.3.2 
+    Effects: Assigns each element of u to the corresponding element of *this. 
+    Remarks: This operator is defined as deleted unless is_copy_assignable_v<Ti> is true for all i.
+    @fn constexpr tuple& operator=(const tuple& u);
+    @returns *this.
+    */
+    constexpr tuple& operator=(const tuple& u) noexcept((std::is_nothrow_copy_assignable_v<Types> && ...)) requires requires {
+        requires (std::assignable_from<Types&, const Types&> && ...);
+    } {
+        _impl::operator=(u);
         return *this;
     }
 
-    constexpr tuple& operator=(tuple&& other) noexcept((std::is_nothrow_move_assignable_v<Types> && ...)) {
-        _impl::operator=(std::move(other));
+    /**
+    § 20.5.3.2 
+    Effects: For all i, assigns std::forward<Ti>(get<i>(u)) to get<i>(*this).
+    Remarks: The exception specification is equivalent to the logical AND of the following expressions:
+            is_nothrow_move_assignable_v<Ti>
+        where Ti is the ith type in Types.
+    @fn constexpr tuple& operator=(tuple&& u) noexcept(see below);
+    @returns *this.
+    */
+    constexpr tuple& operator=(tuple&& u) noexcept((std::is_nothrow_move_assignable_v<Types> && ...)) requires requires {
+        requires (std::assignable_from<Types&, Types&&> && ...);
+    } {
+        _impl::operator=(std::move(u));
+        return *this;
+    }
+
+    /**
+    § 20.5.3.2 
+    Effects: Assigns each element of u to the corresponding element of *this.
+    @fn template<class... UTypes> constexpr tuple& operator=(const tuple<UTypes...>& u);
+    @returns *this.
+    */
+    template <typename... UTypes> 
+    constexpr tuple& operator=(const tuple<UTypes...>& u) requires requires {
+        requires sizeof...(Types) == sizeof...(UTypes);
+        requires (std::assignable_from<Types&, const UTypes&> && ...);
+    } {
+        _impl::operator=(u);
+        return *this;
+    }
+
+    /**
+    § 20.5.3.2 
+    Effects: For all i, assigns std::forward<Ui>(get<i>(u)) to get<i>(*this).
+    @fn template<class... UTypes> constexpr tuple& operator=(tuple<UTypes...>&& u);
+    @returns *this.
+    */
+    template <typename... UTypes> 
+    constexpr tuple& operator=(tuple<UTypes...>&& u) requires requires {
+        requires sizeof...(Types) == sizeof...(UTypes);
+        requires (std::assignable_from<Types&, UTypes> && ...);
+    } {
+        _impl::operator=(std::move(u));
         return *this;
     }
 
@@ -407,12 +765,39 @@ struct tuple<> {
     constexpr tuple() noexcept = default;
     constexpr tuple(const tuple&) noexcept = default;
     constexpr tuple(tuple&&) noexcept = default;
+    template <typename Alloc> 
+    constexpr tuple(std::allocator_arg_t, const Alloc&) noexcept {}
+    template <typename Alloc> 
+    constexpr tuple(std::allocator_arg_t, const Alloc&, const tuple&) noexcept {}
+    template <typename Alloc> 
+    constexpr tuple(std::allocator_arg_t, const Alloc&, tuple&&) noexcept {}
+#if MINPP_STD_COMPAT
+    template <typename Alloc> 
+    constexpr tuple(std::allocator_arg_t, const Alloc&, const std::tuple<>&) noexcept {}
+    template <typename Alloc> 
+    constexpr tuple(std::allocator_arg_t, const Alloc&, std::tuple<>&&) noexcept {}
+#endif
 
     constexpr tuple& operator=(const tuple&) noexcept = default;
     constexpr tuple& operator=(tuple&&) noexcept = default;
+#if MINPP_STD_COMPAT
+    constexpr tuple& operator=(const std::tuple<>&) noexcept { return *this; }
+    constexpr tuple& operator=(std::tuple<>&&) noexcept { return *this; }
+#endif
 
     constexpr void swap(tuple&) noexcept {}
 };
+
+template<typename... UTypes>
+tuple(UTypes...) -> tuple<UTypes...>;
+#if MINPP_STD_COMPAT
+template<typename... UTypes>
+tuple(std::tuple<UTypes...>) -> tuple<UTypes...>;
+#endif
+#if MINPP_STD_COMPAT
+template<class T1, class T2>
+tuple(std::pair<T1, T2>) -> tuple<T1, T2>;
+#endif
 
 template <typename T>
 struct enable_expand_size_with_template_args: public std::false_type {};
@@ -629,5 +1014,12 @@ constexpr void swap(tuple<Ts...>& lhs, tuple<Ts...>& rhs) noexcept(noexcept(lhs.
 }
 
 MINPP_NAMESPACE_END
+
+STD_BEGIN
+
+template <typename... Types, typename Alloc>
+struct uses_allocator<minpp::tuple<Types...>, Alloc> : std::true_type {};
+
+STD_END
 
 #endif

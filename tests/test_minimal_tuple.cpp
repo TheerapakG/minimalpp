@@ -73,28 +73,30 @@ int main() {
     }
     
     {
-        minpp::tuple<size_t, size_t, size_t> tup {minpp::tuple<int, int, int>{0, 1, 2}};
+        minpp::tuple<long, long, long> tup {minpp::tuple<int, int, int>{0, 1, 2}};
 
         auto [a, b, c] {tup};
         std::cout << a << ' ' << b << ' ' << c << std::endl;
     }
 
     {
-        minpp::tuple<size_t, size_t, size_t> tup {std::tuple<int, int, int>{0, 1, 2}};
+        minpp::tuple<long, long, long> tup {std::tuple<int, int, int>{0, 1, 2}};
 
         auto [a, b, c] {tup};
         std::cout << a << ' ' << b << ' ' << c << std::endl;
     }
 
+    /* CANNOT CONSTRUCT: USE make_from_tuple INSTEAD
     {
-        minpp::tuple<size_t, size_t, size_t> tup {minpp::tuple<int, int, int>{0, 1, 2}};
+        std::tuple<long, long, long> tup {minpp::tuple<int, int, int>{0, 1, 2}};
 
         auto [a, b, c] {tup};
         std::cout << a << ' ' << b << ' ' << c << std::endl;
     }
+    */
 
     {
-        minpp::tuple<size_t, size_t, size_t> tup {std::tuple<int, int, int>{0, 1, 2}};
+        std::tuple<long, long, long> tup {std::tuple<int, int, int>{0, 1, 2}};
 
         auto [a, b, c] {tup};
         std::cout << a << ' ' << b << ' ' << c << std::endl;
@@ -118,6 +120,11 @@ int main() {
         auto x = minpp::tuple_cat(t1, t2, t3, t4, minpp::make_tuple(std::unique_ptr<int>{}));
         using expected_type = minpp::tuple<int, short, long, float, double, long double, void*, char*, std::unique_ptr<int>>;
         static_assert(std::is_same<decltype(x), expected_type>::value, "minpp tuple_cat got wrong tuple type!");
+    }
+
+    {
+        static_assert(!std::is_copy_assignable_v<std::tuple<std::unique_ptr<int>>>, "std tuple can copy assign unique_ptr");
+        static_assert(!std::is_copy_assignable_v<minpp::tuple<std::unique_ptr<int>>>, "minpp tuple can copy assign unique_ptr");
     }
     
 }
