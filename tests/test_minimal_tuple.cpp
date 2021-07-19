@@ -3,6 +3,8 @@
 #include <memory>
 
 #include <iostream>
+#include <algorithm>
+#include <numeric>
 
 int main() {
     {
@@ -125,6 +127,15 @@ int main() {
     {
         static_assert(!std::is_copy_assignable_v<std::tuple<std::unique_ptr<int>>>, "std tuple can copy assign unique_ptr");
         static_assert(!std::is_copy_assignable_v<minpp::tuple<std::unique_ptr<int>>>, "minpp tuple can copy assign unique_ptr");
+    }
+    
+    {
+        std::vector<int> vec(1024);
+        std::iota(vec.begin(), vec.end(), 0);
+        std::cout << std::apply(std::accumulate<std::vector<int>::iterator, int>, std::tuple{vec.begin(), vec.end(), 0}) <<std::endl;
+        std::cout << minpp::apply(std::accumulate<std::vector<int>::iterator, int>, std::tuple{vec.begin(), vec.end(), 0}) <<std::endl;
+        // std::cout << std::apply(std::accumulate<std::vector<int>::iterator, int>, minpp::tuple{vec.begin(), vec.end(), 0}) <<std::endl;
+        std::cout << minpp::apply(std::accumulate<std::vector<int>::iterator, int>, minpp::tuple{vec.begin(), vec.end(), 0}) <<std::endl;
     }
     
 }
