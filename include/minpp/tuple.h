@@ -51,12 +51,12 @@ struct tuple_leaf {
 
     template <typename U>
     constexpr tuple_leaf(U&& v) requires requires {
-        requires !std::is_trivially_constructible_v<T, U&&>;
+        requires !std::is_arithmetic_v<T>;
     }: value(std::forward<U>(v)) {}
 
     template <typename U>
     constexpr tuple_leaf(U&& v) requires requires {
-        requires std::is_trivially_constructible_v<T, U&&>;
+        requires std::is_arithmetic_v<T>;
     }: value{std::forward<U>(v)} {}
 
     template <typename U>
@@ -84,7 +84,7 @@ struct tuple_leaf {
     constexpr tuple_leaf(std::allocator_arg_t, const Alloc& a, U&& v) requires requires {
         !leading_allocator_constructible<T, Alloc, U>;
         !trailing_allocator_constructible<T, Alloc, U>;
-        requires !std::is_trivially_constructible_v<T, U>;
+        requires !std::is_arithmetic_v<T>;
     }
     : value(std::forward<U>(v)) {}
 
@@ -92,7 +92,7 @@ struct tuple_leaf {
     constexpr tuple_leaf(std::allocator_arg_t, const Alloc& a, U&& v) requires requires {
         !leading_allocator_constructible<T, Alloc, U>;
         !trailing_allocator_constructible<T, Alloc, U>;
-        requires std::is_trivially_constructible_v<T, U>;
+        requires std::is_arithmetic_v<T>;
     }
     : value{std::forward<U>(v)} {}
 
