@@ -60,11 +60,21 @@ int main() {
             // std::cout << minpp::get<int>(tup) << std::endl; // compilation error
             std::cout << minpp::get<size_t>(mtup) << std::endl;
         }
-        
     }
 
     {
         minpp::tuple<int, int, int> tup1 {0, 1, 2}, tup2;
+
+        for(int i=0; i<2; i++) {
+            auto [a, b, c] {tup2};
+            std::cout << a << ' ' << b << ' ' << c << std::endl;
+
+            tup2 = tup1;
+        }
+    }
+
+    {
+        std::tuple<int, int, int> tup1 {0, 1, 2}, tup2;
 
         for(int i=0; i<2; i++) {
             auto [a, b, c] {tup2};
@@ -102,6 +112,24 @@ int main() {
 
         auto [a, b, c] {tup};
         std::cout << a << ' ' << b << ' ' << c << std::endl;
+    }
+
+    {
+        minpp::tuple<std::pair<int, int>, std::vector<int>, std::vector<int>, std::vector<int>> tup {
+            {1, 2}, 
+            {3, 4}, 
+            {5}, 
+            std::vector<int>(6)
+        };
+
+        auto [a, b, c, d] {tup};
+        std::cout << a.first << ' ' << a.second << std::endl;
+        for(auto i: b) std::cout << i << ' ';
+        std::cout << std::endl;
+        for(auto i: c) std::cout << i << ' ';
+        std::cout << std::endl;
+        for(auto i: d) std::cout << i << ' ';
+        std::cout << std::endl;
     }
 
     {
