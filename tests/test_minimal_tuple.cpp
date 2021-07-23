@@ -6,7 +6,23 @@
 #include <algorithm>
 #include <numeric>
 
+struct print_comp {
+  int val;
+};
+
+bool operator==(const print_comp& lhs, const print_comp& rhs) {
+  std::cout << "comparing eq " << lhs.val << " and " << rhs.val << std::endl;
+  return lhs.val == rhs.val;
+}
+
+auto operator<=>(const print_comp& lhs, const print_comp& rhs) {
+  std::cout << "comparing three way " << lhs.val << " and " << rhs.val << std::endl;
+  return lhs.val <=> rhs.val;
+}
+
 int main() {
+  std::cout << std::boolalpha;
+
   {
     std::cout << std::integral_constant<int, minpp::get<0>(minpp::tuple<int>{0})>::value << std::endl;
   }
@@ -164,6 +180,19 @@ int main() {
     std::cout << minpp::apply(std::accumulate<std::vector<int>::iterator, int>, std::tuple{vec.begin(), vec.end(), 0}) <<std::endl;
     // std::cout << std::apply(std::accumulate<std::vector<int>::iterator, int>, minpp::tuple{vec.begin(), vec.end(), 0}) <<std::endl;
     std::cout << minpp::apply(std::accumulate<std::vector<int>::iterator, int>, minpp::tuple{vec.begin(), vec.end(), 0}) <<std::endl;
+  }
+
+  {
+    minpp::tuple<print_comp, print_comp, print_comp, print_comp> tup1{{1}, {2}, {3}, {4}}, tup2{{1}, {2}, {4}, {5}};
+    minpp::tuple<print_comp, print_comp, print_comp, print_comp> etup1{{1}, {2}, {3}, {4}}, etup2{{1}, {2}, {3}, {4}};
+    std::cout << (tup1 == tup2) << std::endl;
+    std::cout << (etup1 == etup2) << std::endl;
+
+    std::cout << (tup1 < tup2) << std::endl;
+    std::cout << (etup1 < etup2) << std::endl;
+
+    std::cout << (tup1 > tup2) << std::endl;
+    std::cout << (etup1 > etup2) << std::endl;
   }
   
 }

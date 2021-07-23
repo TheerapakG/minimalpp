@@ -302,6 +302,31 @@ MINPP_NAMESPACE_BEGIN
 template <::std::size_t V, ::std::size_t N>
 using make_index_duplicates = typename impl::_make_index_duplicates_t<V, N>::type;
 
+template <typename T, typename U, typename=void>
+struct _synth_three_way_noexcept;
+
+template <typename T, typename U>
+struct _synth_three_way_noexcept<T, U, std::enable_if_t<std::three_way_comparable_with<T, U>>>
+: public std::bool_constant<noexcept(std::declval<T&>() <=> std::declval<U&>())> {};
+
+template <typename T, typename U>
+struct _synth_three_way_noexcept<T, U, std::enable_if_t<!std::three_way_comparable_with<T, U>>>
+: public std::bool_constant<noexcept(std::declval<T&>() < std::declval<U&>()) && noexcept(std::declval<U&>() < std::declval<T&>())> {};
+
+template <typename T, typename U>
+constexpr auto _synth_three_way(const T& t, const U& u) noexcept(_synth_three_way_noexcept<T, U>::value)
+{
+  if constexpr(std::three_way_comparable_with<T, U>) return ( t <=> u );
+  else {
+    if (t < u) return std::weak_ordering::less;
+    if (u < t) return std::weak_ordering::greater;
+    return std::weak_ordering::equivalent;
+  }
+}
+
+template <typename T, typename U>
+using _synth_three_way_result = decltype(_synth_three_way(std::declval<T&>(), std::declval<U&>()));
+
 MINPP_NAMESPACE_END
 
 #endif

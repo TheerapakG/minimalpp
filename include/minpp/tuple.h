@@ -111,7 +111,8 @@ struct tuple_leaf {
   constexpr tuple_leaf(std::allocator_arg_t, const Alloc& a, _select_tuple_leaf_ctor, tuple_leaf<I, U>&& v): tuple_leaf{std::allocator_arg_t{}, a, std::move(v.value)} {}
 
   constexpr void swap(tuple_leaf& other) noexcept(std::is_nothrow_swappable_v<T>) {
-    std::swap(value, other.value);
+    using std::swap;
+    swap(value, other.value);
   }
 };
 
@@ -853,22 +854,22 @@ concept Once_T = requires {
 };
 
 template <typename T, typename... Ts>
-constexpr decltype(auto) _impl_at_type_l(tuple<Ts...>& t) noexcept requires impl::Once_T<T, Ts...> {
+constexpr T& _impl_at_type_l(tuple<Ts...>& t) noexcept requires impl::Once_T<T, Ts...> {
   return _impl_at_type_leaf<T>(t);
 }
 
 template <typename T, typename... Ts>
-constexpr decltype(auto) _impl_at_type_cl(const tuple<Ts...>& t) noexcept requires impl::Once_T<T, Ts...> {
+constexpr const T& _impl_at_type_cl(const tuple<Ts...>& t) noexcept requires impl::Once_T<T, Ts...> {
   return _impl_at_type_leaf<T>(t);
 }
 
 template <typename T, typename... Ts>
-constexpr decltype(auto) _impl_at_type_r(tuple<Ts...>&& t) noexcept requires impl::Once_T<T, Ts...> {
+constexpr T&& _impl_at_type_r(tuple<Ts...>&& t) noexcept requires impl::Once_T<T, Ts...> {
   return _impl_at_type_leaf<T>(std::forward<minpp::tuple<Ts...>&&>(t));
 }
 
 template <typename T, typename... Ts>
-constexpr decltype(auto) _impl_at_type_cr(const tuple<Ts...>&& t) noexcept requires impl::Once_T<T, Ts...> {
+constexpr const T&& _impl_at_type_cr(const tuple<Ts...>&& t) noexcept requires impl::Once_T<T, Ts...> {
   return _impl_at_type_leaf<T>(std::forward<const minpp::tuple<Ts...>&&>(t));
 }
 
@@ -1106,6 +1107,8 @@ MINPP_NAMESPACE_BEGIN
   get(tuple<Types...>& t) noexcept;
   @returns A reference to the Ith element of t, where indexing is zero-based.
   @brief § 20.5.7
+  @note The reason get is a non-member function is that if this functionality had been provided as a member
+  function, code where the type depended on a template parameter would have required using the template keyword.
 */
 template <std::size_t I, typename... Types>
 constexpr decltype(auto) get(minpp::tuple<Types...>& t) noexcept {
@@ -1120,6 +1123,8 @@ constexpr decltype(auto) get(minpp::tuple<Types...>& t) noexcept {
   @brief § 20.5.7
   @note If a type T in Types is some reference type X&, the return type is X&, not X&&. However, if the
   element type is a non-reference type T, the return type is T&&.
+  @note The reason get is a non-member function is that if this functionality had been provided as a member
+  function, code where the type depended on a template parameter would have required using the template keyword.
 */
 template <std::size_t I, typename... Types>
 constexpr decltype(auto) get(minpp::tuple<Types...>&& t) noexcept {
@@ -1135,6 +1140,8 @@ constexpr decltype(auto) get(minpp::tuple<Types...>&& t) noexcept {
   @note Constness is shallow. If a type T in Types is some reference type X&, the return type is X&,
   not const X&. However, if the element type is a non-reference type T, the return type is const T&. This is
   consistent with how constness is defined to work for non-static data members of reference type.
+  @note The reason get is a non-member function is that if this functionality had been provided as a member
+  function, code where the type depended on a template parameter would have required using the template keyword.
 */
 template <std::size_t I, typename... Types>
 constexpr decltype(auto) get(const minpp::tuple<Types...>& t) noexcept {
@@ -1147,45 +1154,155 @@ constexpr decltype(auto) get(const minpp::tuple<Types...>& t) noexcept {
   get(const tuple<Types...>&& t) noexcept;
   @returns A reference to the Ith element of t, where indexing is zero-based.
   @brief § 20.5.7
+  @note The reason get is a non-member function is that if this functionality had been provided as a member
+  function, code where the type depended on a template parameter would have required using the template keyword.
 */
 template <std::size_t I, typename... Types>
 constexpr decltype(auto) get(const minpp::tuple<Types...>&& t) noexcept {
   return minpp::impl::_impl_at<I>(std::forward<const minpp::tuple<Types...>&&>(t));
 }
 
-
-template <typename T, typename... Ts>
-constexpr decltype(auto) get(minpp::tuple<Ts...>& t) noexcept {
+/**
+  @fn template<class T, class... Types>
+  constexpr T& get(tuple<Types...>& t) noexcept;
+  @returns A reference to the element of t corresponding to the type T in Types.
+  @pre The type T occurs exactly once in Types.
+  @brief § 20.5.7
+  @note The reason get is a non-member function is that if this functionality had been provided as a member
+  function, code where the type depended on a template parameter would have required using the template keyword.
+*/
+template <typename T, typename... Types>
+constexpr T& get(minpp::tuple<Types...>& t) noexcept {
   return minpp::impl::_impl_at_type_l<T>(t);
 }
 
-template <typename T, typename... Ts>
-constexpr decltype(auto) get(minpp::tuple<Ts...>&& t) noexcept {
-  return minpp::impl::_impl_at_type_r<T>(std::forward<minpp::tuple<Ts...>&&>(t));
+/**
+  @fn template<class T, class... Types>
+  constexpr T&& get(tuple<Types...>&& t) noexcept;
+  @returns A reference to the element of t corresponding to the type T in Types.
+  @pre The type T occurs exactly once in Types.
+  @brief § 20.5.7
+  @note The reason get is a non-member function is that if this functionality had been provided as a member
+  function, code where the type depended on a template parameter would have required using the template keyword.
+*/
+template <typename T, typename... Types>
+constexpr T&& get(minpp::tuple<Types...>&& t) noexcept {
+  return minpp::impl::_impl_at_type_r<T>(std::forward<minpp::tuple<Types...>&&>(t));
 }
 
-template <typename T, typename... Ts>
-constexpr decltype(auto) get(const minpp::tuple<Ts...>& t) noexcept {
+/**
+  @fn template<class T, class... Types>
+  constexpr const T& get(const tuple<Types...>& t) noexcept;
+  @returns A reference to the element of t corresponding to the type T in Types.
+  @pre The type T occurs exactly once in Types.
+  @brief § 20.5.7
+  @note The reason get is a non-member function is that if this functionality had been provided as a member
+  function, code where the type depended on a template parameter would have required using the template keyword.
+*/
+template <typename T, typename... Types>
+constexpr const T& get(const minpp::tuple<Types...>& t) noexcept {
   return minpp::impl::_impl_at_type_cl<T>(t);
 }
 
-template <typename T, typename... Ts>
-constexpr decltype(auto) get(const minpp::tuple<Ts...>&& t) noexcept {
-  return minpp::impl::_impl_at_type_cr<T>(std::forward<const minpp::tuple<Ts...>&&>(t));
+/**
+  @fn template<class T, class... Types>
+  constexpr const T&& get(const tuple<Types...>&& t) noexcept;
+  @returns A reference to the element of t corresponding to the type T in Types.
+  @pre The type T occurs exactly once in Types.
+  @brief § 20.5.7
+  @note The reason get is a non-member function is that if this functionality had been provided as a member
+  function, code where the type depended on a template parameter would have required using the template keyword.
+*/
+template <typename T, typename... Types>
+constexpr const T&& get(const minpp::tuple<Types...>&& t) noexcept {
+  return minpp::impl::_impl_at_type_cr<T>(std::forward<const minpp::tuple<Types...>&&>(t));
 }
 
-template <typename... Ts>
-constexpr void swap(tuple<Ts...>& lhs, tuple<Ts...>& rhs) noexcept(noexcept(lhs.swap(rhs))) {
-  lhs.swap(rhs);
+MINPP_NAMESPACE_END
+
+MINPP_IMPL_BEGIN
+
+template <typename TTuple, typename UTuple, std::size_t... Is>
+constexpr bool _impl_tuple_eq(const TTuple& t, const UTuple& u, std::index_sequence<Is...>) {
+  return (... && (get<Is>(t) == get<Is>(u)));
+}
+
+template <typename Category, typename TTuple, typename UTuple, std::size_t... Is>
+constexpr Category _impl_tuple_three_way(const TTuple& t, const UTuple& u, std::index_sequence<Is...>) {
+  Category _comp_val = std::strong_ordering::equal;
+  (... || ((_comp_val = _synth_three_way(get<Is>(t), get<Is>(u))) != 0));
+  return _comp_val;
+}
+
+MINPP_IMPL_END
+
+MINPP_NAMESPACE_BEGIN
+
+/**
+  @fn template<class... TTypes, class... UTypes>
+  constexpr bool operator==(const tuple<TTypes...>& t, const tuple<UTypes...>& u);
+  @returns true if get<i>(t) == get<i>(u) for all i, otherwise false. For any two zero-length tuples
+  e and f, e == f returns true.
+  @pre For all i, where 0 ≤ i < sizeof...(TTypes), get<i>(t) == get<i>(u) is a valid expression returning a type that is convertible to bool. sizeof...(TTypes) equals sizeof...(UTypes).
+  @brief § 20.5.8
+  @remarks The elementary comparisons are performed in order from the zeroth index upwards. No
+  comparisons or element accesses are performed after the first equality comparison that evaluates to
+  false.
+*/
+template <typename... TTypes, typename... UTypes>
+constexpr bool operator==(const tuple<TTypes...>& t, const tuple<UTypes...>& u) {
+  return _impl_tuple_eq(t, u, std::make_index_sequence<sizeof...(TTypes)>{});
+}
+
+/**
+  @fn template<class... TTypes, class... UTypes>
+  constexpr common_comparison_category_t<synth-three-way-result <TTypes, UTypes>...>
+  operator<=>(const tuple<TTypes...>& t, const tuple<UTypes...>& u);
+  @brief § 20.5.8 
+  Performs a lexicographical comparison between t and u. For any two zero-length tuples t and
+  u, t <=> u returns strong_ordering::equal. Otherwise, equivalent to:
+    if (auto c = synth-three-way (get<0>(t), get<0>(u)); c != 0) return c;
+    return ttail <=> utail;
+  where rtail for some tuple r is a tuple containing all but the first element of r.
+  @note The above definition does not require ttail (or utail) to be constructed. It might not even be possible, as t
+  and u are not required to be copy constructible. Also, all comparison operator functions are short circuited; they do
+  not perform element accesses beyond what is required to determine the result of the comparison.
+*/
+template <typename... TTypes, typename... UTypes>
+constexpr auto operator<=>(const tuple<TTypes...>& t, const tuple<UTypes...>& u) {
+  return _impl_tuple_three_way<std::common_comparison_category_t<_synth_three_way_result<TTypes, UTypes>...>>(t, u, std::make_index_sequence<sizeof...(TTypes)>{});
 }
 
 MINPP_NAMESPACE_END
 
 MINPP_STD_BEGIN
 
+/**
+  @pre Alloc meets the Cpp17Allocator requirements (Table 36).
+  @brief § 20.5.9 
+  @note Specialization of this trait informs other library components that tuple can be constructed with an
+  allocator, even though it does not have a nested allocator_type.
+*/
 template <typename... Types, typename Alloc>
 struct uses_allocator<minpp::tuple<Types...>, Alloc> : std::true_type {};
 
 MINPP_STD_END
+
+MINPP_NAMESPACE_BEGIN
+
+/**
+  @fn template<class... Types>
+  constexpr void swap(tuple<Types...>& x, tuple<Types...>& y) noexcept(see below);
+  @brief § 20.5.10 
+  As if by x.swap(y).
+  @remarks The exception specification is equivalent to:
+  noexcept(x.swap(y))
+*/
+template <typename... Types>
+constexpr void swap(tuple<Types...>& x, tuple<Types...>& y) noexcept(noexcept(x.swap(y))) {
+  x.swap(y);
+}
+
+MINPP_NAMESPACE_END
 
 #endif
